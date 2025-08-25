@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node / tooling
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build artifacts
+.dist/
+dist/
+build/
+coverage/
+
+# Env/config
+.env
+.env.*
+*.local
+
+# VS Code
+.vscode/

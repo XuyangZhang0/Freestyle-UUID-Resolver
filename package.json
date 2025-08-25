@@ -1,0 +1,67 @@
+{
+  "name": "workspace-one-uuid-resolver",
+  "version": "1.0.0",
+  "description": "Chrome extension for resolving UUIDs to human-readable names in Workspace ONE UEM workflows",
+  "main": "manifest.json",
+  "scripts": {
+    "dev": "echo 'Load unpacked extension in Chrome from this directory'",
+    "lint": "eslint content/ background/ popup/ --ext .js",
+    "lint:fix": "eslint content/ background/ popup/ --ext .js --fix",
+    "format": "prettier --write \"**/*.{js,css,html,json,md}\"",
+    "validate": "web-ext lint",
+    "build": "echo 'No build process required for Chrome extension'",
+    "package": "web-ext build --source-dir . --artifacts-dir dist/",
+    "test": "echo 'Tests not implemented yet'",
+    "docs": "echo 'Generate documentation'",
+    "clean": "rm -rf dist/ web-ext-artifacts/"
+  },
+  "keywords": [
+    "chrome-extension",
+    "workspace-one",
+    "uem",
+    "uuid",
+    "resolver",
+    "automation",
+    "workflows"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/uuid-resolver.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/uuid-resolver/issues"
+  },
+  "homepage": "https://github.com/your-username/uuid-resolver#readme",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.25.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.0.0",
+    "prettier": "^2.5.0",
+    "web-ext": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "browserslist": [
+    "last 2 Chrome versions"
+  ],
+  "webExt": {
+    "sourceDir": ".",
+    "artifactsDir": "dist",
+    "ignoreFiles": [
+      "node_modules",
+      "package*.json",
+      ".git",
+      ".gitignore",
+      "README.md",
+      "*.md",
+      ".eslintrc.*",
+      ".prettierrc.*",
+      "dist"
+    ]
+  }
+}

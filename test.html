@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UUID Resolver Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .uuid-sample {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #0078d4;
+        }
+        .instructions {
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 UUID Resolver Chrome Extension Test Page</h1>
+    
+    <div class="instructions">
+        <h2>📋 Testing Instructions (Context Menu Approach)</h2>
+        <div class="step">
+            <strong>Step 1:</strong> Load the extension in Chrome Developer mode
+        </div>
+        <div class="step">
+            <strong>Step 2:</strong> Select any UUID text below by clicking and dragging
+        </div>
+        <div class="step">
+            <strong>Step 3:</strong> Right-click on the selected text
+        </div>
+        <div class="step">
+            <strong>Step 4:</strong> Choose "Resolve UUID" from the context menu
+        </div>
+        <div class="step">
+            <strong>Step 5:</strong> You should see a notification about the UUID (or asking for configuration)
+        </div>
+        <div class="step">
+            <strong>Step 6:</strong> If prompted, configure your UEM server by clicking the extension icon
+        </div>
+    </div>
+
+    <h2>🆔 Sample UUIDs for Testing</h2>
+    <p>These are sample UUIDs that would typically be found in Workspace ONE UEM workflows:</p>
+    
+    <div class="uuid-sample">
+        <strong>Tag UUID:</strong> 12345678-1234-5678-9012-123456789abc
+    </div>
+    
+    <div class="uuid-sample">
+        <strong>Application UUID:</strong> 87654321-4321-8765-2109-cba987654321
+    </div>
+    
+    <div class="uuid-sample">
+        <strong>Profile UUID:</strong> 11111111-2222-3333-4444-555555555555
+    </div>
+    
+    <div class="uuid-sample">
+        <strong>Script UUID:</strong> 99999999-aaaa-bbbb-cccc-dddddddddddd
+    </div>
+    
+    <div class="uuid-sample">
+        <strong>Product UUID:</strong> 88888888-9999-aaaa-bbbb-cccccccccccc
+    </div>
+    
+    <div class="uuid-sample">
+        <strong>Organization Group UUID:</strong> ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj
+    </div>
+
+    <h2>🔧 Troubleshooting</h2>
+    <ul>
+        <li><strong>Context menu not appearing?</strong> Make sure you have selected some text first, then right-click</li>
+        <li><strong>No "Resolve UUID" option?</strong> Check that the extension is loaded and enabled in chrome://extensions/</li>
+        <li><strong>Nothing happens after clicking "Resolve UUID"?</strong> Open Chrome DevTools (F12) and check console for errors</li>
+        <li><strong>No notification appears?</strong> Check if Chrome notifications are enabled for the extension</li>
+        <li><strong>Settings not saving?</strong> Check the browser console for error messages</li>
+        <li><strong>Connection test failing?</strong> Verify your UEM server URL and credentials</li>
+    </ul>
+
+    <h2>🌐 Navigate to UEM Server</h2>
+    <p>For full testing, navigate to your Workspace ONE UEM server (*.data.workspaceone.com) where the content scripts will activate and detect UUIDs in the workflow pages.</p>
+
+    <script>
+        // Add some debugging info
+        console.log('UUID Resolver Test Page: Loaded');
+        console.log('Current URL:', window.location.href);
+        console.log('User Agent:', navigator.userAgent);
+        
+        // Simulate some UUID detection for testing
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('UUID Resolver Test Page: DOM ready');
+            
+            // Highlight UUIDs on the page
+            const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+            const textNodes = document.evaluate(
+                "//text()[contains(., '-')]",
+                document,
+                null,
+                XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE,
+                null
+            );
+            
+            for (let i = 0; i < textNodes.snapshotLength; i++) {
+                const node = textNodes.snapshotItem(i);
+                if (node.nodeValue && uuidRegex.test(node.nodeValue)) {
+                    const parent = node.parentNode;
+                    const newContent = node.nodeValue.replace(uuidRegex, '<mark style="background: yellow; padding: 2px;">$&</mark>');
+                    parent.innerHTML = parent.innerHTML.replace(node.nodeValue, newContent);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

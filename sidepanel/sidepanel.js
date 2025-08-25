@@ -1,0 +1,590 @@
+/**
+ * Side Panel Script for UUID Resolver Chrome Extension
+ */
+
+'use strict';
+
+// Global state
+let currentSettings = {};
+let autoSaveTimeout = null;
+let isDirty = false;
+let isInitialized = false;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('UUID Resolver Side Panel: Initializing...');
+  
+  try {
+    await initializeSidePanel();
+    setupEventListeners();
+    await loadSettings();
+    await updateStats();
+    updateStatus();
+    
+    isInitialized = true;
+    console.log('UUID Resolver Side Panel: Initialization complete');
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Initialization failed:', error);
+    showMessage('Failed to initialize side panel', 'error');
+  }
+});
+
+/**
+ * Initialize side panel
+ */
+async function initializeSidePanel() {
+  // Set up authentication type switching
+  const authTypeSelect = document.getElementById('authType');
+  authTypeSelect.addEventListener('change', toggleAuthType);
+  
+  // Initial auth type setup
+  toggleAuthType();
+}
+
+/**
+ * Set up all event listeners
+ */
+function setupEventListeners() {
+  // Auto-save on input changes
+  const inputs = document.querySelectorAll('input[type="text"], input[type="url"], input[type="password"], input[type="number"], select');
+  console.log('UUID Resolver Side Panel: Setting up auto-save for', inputs.length, 'input fields');
+  
+  inputs.forEach((input, index) => {
+    if (input.id !== 'authToken') { // Don't auto-save readonly OAuth token
+      console.log(`UUID Resolver Side Panel: Adding listeners to input ${index}: ${input.id || input.name || 'unnamed'}`);
+      input.addEventListener('input', handleInputChange);
+      input.addEventListener('change', handleInputChange);
+      input.addEventListener('blur', handleInputBlur);
+    }
+  });
+  
+  // Checkbox changes
+  const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+  console.log('UUID Resolver Side Panel: Setting up auto-save for', checkboxes.length, 'checkboxes');
+  
+  checkboxes.forEach((checkbox, index) => {
+    console.log(`UUID Resolver Side Panel: Adding listeners to checkbox ${index}: ${checkbox.id || checkbox.name || 'unnamed'}`);
+    checkbox.addEventListener('change', handleInputChange);
+  });
+  
+  // Action buttons
+  document.getElementById('refreshBtn').addEventListener('click', handleRefresh);
+  document.getElementById('clearCacheBtn').addEventListener('click', handleClearCache);
+  document.getElementById('testConnectionBtn').addEventListener('click', handleTestConnection);
+}
+
+/**
+ * Handle input changes for auto-save
+ */
+function handleInputChange(event) {
+  console.log('UUID Resolver Side Panel: Input changed:', event.target.id || event.target.name);
+  markAsDirty();
+  
+  // Clear existing timeout
+  if (autoSaveTimeout) {
+    clearTimeout(autoSaveTimeout);
+  }
+  
+  // Set new timeout for auto-save
+  autoSaveTimeout = setTimeout(() => autoSave(), 1500);
+}
+
+/**
+ * Handle input blur for immediate save
+ */
+function handleInputBlur(event) {
+  console.log('UUID Resolver Side Panel: Input blur:', event.target.id || event.target.name);
+  
+  // Clear auto-save timeout and save immediately
+  if (autoSaveTimeout) {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = null;
+  }
+  
+  autoSave();
+}
+
+/**
+ * Mark form as dirty (unsaved changes)
+ */
+function markAsDirty() {
+  if (!isDirty) {
+    isDirty = true;
+    const indicator = document.getElementById('unsavedIndicator');
+    if (indicator) {
+      indicator.classList.add('visible');
+    }
+    console.log('UUID Resolver Side Panel: Form marked as dirty');
+  }
+}
+
+/**
+ * Mark form as clean (saved)
+ */
+function markAsClean() {
+  if (isDirty) {
+    isDirty = false;
+    const indicator = document.getElementById('unsavedIndicator');
+    if (indicator) {
+      indicator.classList.remove('visible');
+    }
+    console.log('UUID Resolver Side Panel: Form marked as clean');
+  }
+}
+
+/**
+ * Auto-save settings
+ */
+async function autoSave() {
+  if (!isInitialized) {
+    console.log('UUID Resolver Side Panel: Skipping auto-save - not initialized');
+    return;
+  }
+  
+  try {
+    console.log('UUID Resolver Side Panel: Auto-saving settings...');
+    const settings = collectSettings();
+    await saveSettings(settings);
+    markAsClean();
+    showMessage('Settings saved automatically', 'success');
+    console.log('UUID Resolver Side Panel: Auto-save completed');
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Auto-save failed:', error);
+    showMessage('Failed to save settings automatically', 'error');
+  }
+}
+
+/**
+ * Toggle authentication type visibility
+ */
+function toggleAuthType() {
+  const authType = document.getElementById('authType').value;
+  const basicAuthGroup = document.getElementById('basicAuthGroup');
+  const oauthGroup = document.getElementById('oauthGroup');
+  
+  if (authType === 'basic') {
+    basicAuthGroup.style.display = 'block';
+    oauthGroup.style.display = 'none';
+  } else {
+    basicAuthGroup.style.display = 'none';
+    oauthGroup.style.display = 'block';
+  }
+}
+
+/**
+ * Load settings from storage
+ */
+async function loadSettings() {
+  try {
+    console.log('UUID Resolver Side Panel: Loading settings...');
+    
+    // Try multiple storage methods with fallbacks
+    let settings = {};
+    
+    // Method 1: Chrome runtime message to background script
+    try {
+      const response = await sendMessage({ action: 'getSettings' });
+      if (response && response.success && response.data) {
+        settings = response.data;
+        console.log('UUID Resolver Side Panel: Settings loaded via background script');
+      }
+    } catch (error) {
+      console.warn('UUID Resolver Side Panel: Background script method failed:', error);
+    }
+    
+    // Method 2: Direct Chrome storage (fallback)
+    if (Object.keys(settings).length === 0) {
+      try {
+        settings = await getStorageData();
+        console.log('UUID Resolver Side Panel: Settings loaded via direct storage');
+      } catch (error) {
+        console.warn('UUID Resolver Side Panel: Direct storage method failed:', error);
+      }
+    }
+    
+    // Method 3: Use defaults if no settings found
+    if (Object.keys(settings).length === 0) {
+      settings = getDefaultSettings();
+      console.log('UUID Resolver Side Panel: Using default settings');
+    }
+    
+    currentSettings = settings;
+    populateForm(settings);
+    
+    console.log('UUID Resolver Side Panel: Settings loaded successfully');
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Failed to load settings:', error);
+    showMessage('Failed to load settings', 'error');
+    
+    // Use defaults as last resort
+    const defaults = getDefaultSettings();
+    currentSettings = defaults;
+    populateForm(defaults);
+  }
+}
+
+/**
+ * Save settings to storage
+ */
+async function saveSettings(settings) {
+  currentSettings = settings;
+  
+  // Method 1: Try background script first
+  try {
+    const response = await sendMessage({ 
+      action: 'saveSettings', 
+      settings: settings 
+    });
+    
+    if (response && response.success) {
+      console.log('UUID Resolver Side Panel: Settings saved via background script');
+      return;
+    }
+  } catch (error) {
+    console.warn('UUID Resolver Side Panel: Background script save failed:', error);
+  }
+  
+  // Method 2: Direct storage fallback
+  try {
+    await setStorageData(settings);
+    console.log('UUID Resolver Side Panel: Settings saved via direct storage');
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Direct storage save failed:', error);
+    throw new Error('Failed to save settings to any storage method');
+  }
+}
+
+/**
+ * Collect settings from form
+ */
+function collectSettings() {
+  return {
+    enabled: document.getElementById('enabled').checked,
+    serverUrl: document.getElementById('serverUrl').value.trim(),
+    authType: document.getElementById('authType').value,
+    
+    // Basic auth
+    username: document.getElementById('username').value.trim(),
+    password: document.getElementById('password').value,
+    apiKey: document.getElementById('apiKey').value.trim(),
+    
+    // OAuth
+    clientId: document.getElementById('clientId').value.trim(),
+    clientSecret: document.getElementById('clientSecret').value.trim(),
+    tokenUrl: document.getElementById('tokenUrl').value.trim(),
+    authToken: document.getElementById('authToken').value,
+    
+    // General settings
+    autoRefresh: document.getElementById('autoRefresh').checked,
+    showTooltips: document.getElementById('showTooltips').checked,
+    cacheTimeout: 300000, // 5 minutes
+    
+    // Entity types
+    entityTypes: {
+      tag: document.getElementById('entityTag').checked,
+      application: document.getElementById('entityApplication').checked,
+      profile: document.getElementById('entityProfile').checked,
+      script: document.getElementById('entityScript').checked,
+      product: document.getElementById('entityProduct').checked,
+      organizationGroup: document.getElementById('entityOrganizationGroup').checked
+    }
+  };
+}
+
+/**
+ * Populate form with settings
+ */
+function populateForm(settings) {
+  try {
+    // Basic settings
+    document.getElementById('enabled').checked = settings.enabled !== false;
+    document.getElementById('serverUrl').value = settings.serverUrl || '';
+    document.getElementById('authType').value = settings.authType || 'basic';
+    
+    // Basic auth
+    document.getElementById('username').value = settings.username || '';
+    document.getElementById('password').value = settings.password || '';
+    document.getElementById('apiKey').value = settings.apiKey || '';
+    
+    // OAuth
+    document.getElementById('clientId').value = settings.clientId || '';
+    document.getElementById('clientSecret').value = settings.clientSecret || '';
+    document.getElementById('tokenUrl').value = settings.tokenUrl || '';
+    document.getElementById('authToken').value = settings.authToken || '';
+    
+    // General settings
+    document.getElementById('autoRefresh').checked = settings.autoRefresh !== false;
+    document.getElementById('showTooltips').checked = settings.showTooltips !== false;
+    
+    // Entity types
+    const entityTypes = settings.entityTypes || {};
+    document.getElementById('entityTag').checked = entityTypes.tag !== false;
+    document.getElementById('entityApplication').checked = entityTypes.application !== false;
+    document.getElementById('entityProfile').checked = entityTypes.profile !== false;
+    document.getElementById('entityScript').checked = entityTypes.script !== false;
+    document.getElementById('entityProduct').checked = entityTypes.product !== false;
+    document.getElementById('entityOrganizationGroup').checked = entityTypes.organizationGroup !== false;
+    
+    // Update auth type visibility
+    toggleAuthType();
+    
+    console.log('UUID Resolver Side Panel: Form populated with settings');
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Error populating form:', error);
+  }
+}
+
+/**
+ * Get default settings
+ */
+function getDefaultSettings() {
+  return {
+    enabled: true,
+    serverUrl: '',
+    authType: 'basic',
+    username: '',
+    password: '',
+    apiKey: '',
+    clientId: '',
+    clientSecret: '',
+    tokenUrl: '',
+    authToken: '',
+    autoRefresh: true,
+    showTooltips: true,
+    cacheTimeout: 300000,
+    entityTypes: {
+      tag: true,
+      application: true,
+      profile: true,
+      script: true,
+      product: true,
+      organizationGroup: true
+    }
+  };
+}
+
+/**
+ * Update statistics display
+ */
+async function updateStats() {
+  try {
+    // Get stats from active tab's content script
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs.length === 0) return;
+    
+    const response = await chrome.tabs.sendMessage(tabs[0].id, { action: 'getStatistics' });
+    if (response && response.success && response.data) {
+      const stats = response.data;
+      
+      document.getElementById('uuidCount').textContent = stats.totalFound || 0;
+      document.getElementById('resolvedCount').textContent = stats.totalResolved || 0;
+      document.getElementById('cacheHits').textContent = stats.cacheHits || 0;
+    }
+  } catch (error) {
+    console.log('UUID Resolver Side Panel: Could not get stats (normal if not on UEM page)');
+    // Reset to zeros if no stats available
+    document.getElementById('uuidCount').textContent = '0';
+    document.getElementById('resolvedCount').textContent = '0';
+    document.getElementById('cacheHits').textContent = '0';
+  }
+}
+
+/**
+ * Update status indicator
+ */
+function updateStatus() {
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  
+  if (currentSettings.serverUrl && (
+    (currentSettings.authType === 'basic' && currentSettings.username && currentSettings.password) ||
+    (currentSettings.authType === 'oauth' && currentSettings.clientId && currentSettings.clientSecret)
+  )) {
+    statusDot.className = 'status-dot online';
+    statusText.textContent = 'Configuration Complete';
+  } else {
+    statusDot.className = 'status-dot offline';
+    statusText.textContent = 'Configuration Required';
+  }
+}
+
+/**
+ * Handle refresh action
+ */
+async function handleRefresh() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs.length === 0) return;
+    
+    await chrome.tabs.sendMessage(tabs[0].id, { action: 'refreshResolution' });
+    showMessage('UUID resolution refreshed', 'success');
+    
+    // Update stats after refresh
+    setTimeout(() => updateStats(), 1000);
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Refresh failed:', error);
+    showMessage('Refresh failed - not on a UEM page?', 'error');
+  }
+}
+
+/**
+ * Handle clear cache action
+ */
+async function handleClearCache() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs.length === 0) return;
+    
+    await chrome.tabs.sendMessage(tabs[0].id, { action: 'clearCache' });
+    showMessage('Cache cleared successfully', 'success');
+    
+    // Update stats after clearing cache
+    setTimeout(() => updateStats(), 500);
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Clear cache failed:', error);
+    showMessage('Clear cache failed', 'error');
+  }
+}
+
+/**
+ * Handle test connection
+ */
+async function handleTestConnection() {
+  const testBtn = document.getElementById('testConnectionBtn');
+  const testResult = document.getElementById('testResult');
+  
+  try {
+    // Disable button and show loading
+    testBtn.disabled = true;
+    testBtn.textContent = 'Testing...';
+    testResult.style.display = 'none';
+    
+    const settings = collectSettings();
+    
+    // Validate required fields
+    if (!settings.serverUrl) {
+      throw new Error('Server URL is required');
+    }
+    
+    if (settings.authType === 'basic' && (!settings.username || !settings.password)) {
+      throw new Error('Username and password are required for Basic authentication');
+    }
+    
+    if (settings.authType === 'oauth' && (!settings.clientId || !settings.clientSecret || !settings.tokenUrl)) {
+      throw new Error('Client ID, Client Secret, and Token URL are required for OAuth');
+    }
+    
+    // Test connection via background script
+    const response = await sendMessage({ 
+      action: 'testConnection', 
+      settings: settings 
+    });
+    
+    if (response && response.success) {
+      const result = response.data;
+      
+      // Update OAuth token if received
+      if (settings.authType === 'oauth' && result.token) {
+        document.getElementById('authToken').value = result.token;
+        settings.authToken = result.token;
+        await saveSettings(settings);
+      }
+      
+      // Show success message
+      testResult.className = 'test-result success';
+      testResult.innerHTML = `
+        <strong>✅ Connection successful!</strong><br>
+        Server: ${result.serverInfo?.version || 'Unknown'}<br>
+        Build: ${result.serverInfo?.build || 'Unknown'}
+      `;
+      testResult.style.display = 'block';
+      
+      updateStatus();
+      
+    } else {
+      throw new Error(response?.error || 'Connection test failed');
+    }
+    
+  } catch (error) {
+    console.error('UUID Resolver Side Panel: Connection test failed:', error);
+    
+    testResult.className = 'test-result error';
+    testResult.innerHTML = `<strong>❌ Connection failed:</strong><br>${error.message}`;
+    testResult.style.display = 'block';
+    
+  } finally {
+    // Re-enable button
+    testBtn.disabled = false;
+    testBtn.innerHTML = '<span class="btn-icon">🔧</span> Test Connection';
+  }
+}
+
+/**
+ * Show temporary message
+ */
+function showMessage(message, type = 'success') {
+  const saveStatus = document.getElementById('saveStatus');
+  saveStatus.textContent = message;
+  saveStatus.className = `save-status ${type} visible`;
+  
+  setTimeout(() => {
+    saveStatus.classList.remove('visible');
+  }, 3000);
+}
+
+/**
+ * Send message to background script
+ */
+function sendMessage(message) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Message timeout'));
+    }, 5000);
+    
+    chrome.runtime.sendMessage(message, (response) => {
+      clearTimeout(timeout);
+      
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+/**
+ * Get data from Chrome storage
+ */
+function getStorageData() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(null, (result) => {
+      resolve(result);
+    });
+  });
+}
+
+/**
+ * Set data to Chrome storage
+ */
+function setStorageData(data) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set(data, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+// Update stats periodically
+setInterval(() => {
+  if (isInitialized) {
+    updateStats();
+    updateStatus();
+  }
+}, 5000);
+
+console.log('UUID Resolver Side Panel: Script loaded');
