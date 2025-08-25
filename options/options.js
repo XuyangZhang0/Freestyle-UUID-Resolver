@@ -78,7 +78,6 @@ function setupEventListeners() {
   // Action buttons
   document.getElementById('testConnectionBtn').addEventListener('click', handleTestConnection);
   document.getElementById('refreshBtn').addEventListener('click', handleRefresh);
-  document.getElementById('clearCacheBtn').addEventListener('click', handleClearCache);
   document.getElementById('exportSettingsBtn').addEventListener('click', handleExportSettings);
   document.getElementById('resetSettingsBtn').addEventListener('click', handleResetSettings);
   document.getElementById('openOptionsBtn').addEventListener('click', () => {
@@ -333,7 +332,6 @@ function collectSettings() {
     // General settings
     autoRefresh: document.getElementById('autoRefresh').checked,
     showTooltips: document.getElementById('showTooltips').checked,
-    cacheTimeout: parseInt(document.getElementById('cacheTimeout').value) * 60000, // Convert to ms
     
     // Advanced settings
     apiTimeout: parseInt(document.getElementById('apiTimeout').value) * 1000, // Convert to ms
@@ -377,7 +375,6 @@ function populateForm(settings) {
     // General settings
     document.getElementById('autoRefresh').checked = settings.autoRefresh !== false;
     document.getElementById('showTooltips').checked = settings.showTooltips !== false;
-    document.getElementById('cacheTimeout').value = Math.floor((settings.cacheTimeout || 300000) / 60000); // Convert to minutes
     
     // Advanced settings
     document.getElementById('apiTimeout').value = Math.floor((settings.apiTimeout || 30000) / 1000); // Convert to seconds
@@ -419,7 +416,6 @@ function getDefaultSettings() {
     authToken: '',
     autoRefresh: true,
     showTooltips: true,
-    cacheTimeout: 300000, // 5 minutes
     apiTimeout: 30000, // 30 seconds
     maxConcurrentRequests: 5,
     debugMode: false,
@@ -441,7 +437,7 @@ async function updateStats() {
   try {
     // Get stats from all tabs
     const tabs = await chrome.tabs.query({ url: 'https://*.data.workspaceone.com/*' });
-    let totalStats = { totalFound: 0, totalResolved: 0, cacheHits: 0 };
+    let totalStats = { totalFound: 0, totalResolved: 0 };
     
     for (const tab of tabs) {
       try {
@@ -450,7 +446,6 @@ async function updateStats() {
           const stats = response.data;
           totalStats.totalFound += stats.totalFound || 0;
           totalStats.totalResolved += stats.totalResolved || 0;
-          totalStats.cacheHits += stats.cacheHits || 0;
         }
       } catch (error) {
         // Tab might not have content script, ignore
@@ -460,7 +455,6 @@ async function updateStats() {
     // Update display
     document.getElementById('uuidCount').textContent = totalStats.totalFound;
     document.getElementById('resolvedCount').textContent = totalStats.totalResolved;
-    document.getElementById('cacheHits').textContent = totalStats.cacheHits;
     
     // Calculate success rate
     const successRate = totalStats.totalFound > 0 
@@ -473,7 +467,6 @@ async function updateStats() {
     // Reset to zeros if no stats available
     document.getElementById('uuidCount').textContent = '0';
     document.getElementById('resolvedCount').textContent = '0';
-    document.getElementById('cacheHits').textContent = '0';
     document.getElementById('successRate').textContent = '0%';
   }
 }
@@ -612,33 +605,6 @@ async function handleRefresh() {
   } catch (error) {
     console.error('UUID Resolver Options: Refresh failed:', error);
     showToast('Refresh failed - not on a UEM page?', 'warning');
-  }
-}
-
-/**
- * Handle clear cache action
- */
-async function handleClearCache() {
-  try {
-    const tabs = await chrome.tabs.query({ url: 'https://*.data.workspaceone.com/*' });
-    let clearedCount = 0;
-    
-    for (const tab of tabs) {
-      try {
-        await chrome.tabs.sendMessage(tab.id, { action: 'clearCache' });
-        clearedCount++;
-      } catch (error) {
-        // Tab might not have content script, ignore
-      }
-    }
-    
-    showToast(`Cache cleared on ${clearedCount} UEM tabs`, 'success');
-    
-    // Update stats after clearing cache
-    setTimeout(() => updateStats(), 500);
-  } catch (error) {
-    console.error('UUID Resolver Options: Clear cache failed:', error);
-    showToast('Failed to clear cache', 'error');
   }
 }
 

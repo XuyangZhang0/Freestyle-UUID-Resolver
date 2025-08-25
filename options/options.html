@@ -46,10 +46,6 @@
             <div class="stat-label">Resolved</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" id="cacheHits">0</div>
-            <div class="stat-label">Cache Hits</div>
-          </div>
-          <div class="stat-card">
             <div class="stat-value" id="successRate">0%</div>
             <div class="stat-label">Success Rate</div>
           </div>
@@ -67,10 +63,6 @@
           <button id="refreshBtn" class="action-btn secondary">
             <span class="btn-icon">🔄</span>
             Refresh Current Page
-          </button>
-          <button id="clearCacheBtn" class="action-btn secondary">
-            <span class="btn-icon">🗑️</span>
-            Clear Cache
           </button>
           <button id="exportSettingsBtn" class="action-btn secondary">
             <span class="btn-icon">📥</span>
@@ -195,12 +187,6 @@
                 <div class="checkbox-description">Display additional information when hovering over resolved UUIDs</div>
               </div>
             </label>
-          </div>
-
-          <div class="form-group">
-            <label for="cacheTimeout">Cache Timeout (minutes)</label>
-            <input type="number" id="cacheTimeout" min="1" max="1440" value="5">
-            <small>How long to cache resolved UUID information</small>
           </div>
         </section>
 

@@ -176,48 +176,37 @@
    * Set up message handling from popup and background script
    */
   function setupMessageHandling() {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('UUID Resolver: Received message in content script:', message);
-      
-      switch (message.action) {
-        case 'getStatistics':
-          const stats = uiEnhancer.getStatistics();
-          sendResponse({ success: true, data: stats });
-          break;
+    chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+      try {
+        switch (message.action) {
+          case 'getStatistics':
+            const stats = uiEnhancer.getStatistics();
+            sendResponse({ success: true, data: stats });
+            return;
 
-        case 'refreshResolution':
-          performRefresh();
-          sendResponse({ success: true });
-          break;
+          case 'toggleExtension':
+            toggleExtension(message.enabled);
+            sendResponse({ success: true });
+            return;
 
-        case 'clearCache':
-          apiClient.clearCache();
-          sendResponse({ success: true });
-          break;
+          case 'resolveSpecificUUID':
+            console.log('UUID Resolver: Handling resolveSpecificUUID for:', message.uuid);
+            resolveSpecificUUID(message.uuid);
+            sendResponse({ success: true });
+            return;
 
-        case 'toggleExtension':
-          toggleExtension(message.enabled);
-          sendResponse({ success: true });
-          break;
+          case 'resolveFocusedElementUUID':
+            console.log('UUID Resolver: Handling resolveFocusedElementUUID');
+            resolveFocusedElementUUID();
+            sendResponse({ success: true });
+            return;
 
-        case 'resolveSpecificUUID':
-          console.log('UUID Resolver: Handling resolveSpecificUUID for:', message.uuid);
-          resolveSpecificUUID(message.uuid);
-          sendResponse({ success: true });
-          break;
-
-        case 'resolveFocusedElementUUID':
-          console.log('UUID Resolver: Handling resolveFocusedElementUUID');
-          resolveFocusedElementUUID();
-          sendResponse({ success: true });
-          break;
-
-        default:
-          console.log('UUID Resolver: Unknown action:', message.action);
-          sendResponse({ success: false, error: 'Unknown action' });
+          default:
+            sendResponse({ success: false, error: 'Unknown action' });
+        }
+      } catch (e) {
+        sendResponse({ success: false, error: e.message });
       }
-      
-      return true; // Keep message channel open for async response
     });
   }
 
@@ -228,9 +217,6 @@
     try {
       // Clear existing enhancements
       uiEnhancer.removeAllEnhancements();
-      
-      // Clear cache
-      apiClient.clearCache();
       
       // Perform fresh scan
       await performInitialScan();
@@ -501,7 +487,6 @@
     },
     getStatistics: () => uiEnhancer.getStatistics(),
     refresh: performRefresh,
-    clearCache: () => apiClient.clearCache(),
     getSettings: getExtensionSettings,
     testApiClient: async () => {
       console.log('=== API Client Test ===');
