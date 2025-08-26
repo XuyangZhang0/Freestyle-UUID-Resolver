@@ -44,9 +44,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "popup/popup.html", 
-        "popup/popup.css", 
-        "popup/popup.js",
+        "popup/popup.html",
         "options/options.html",
         "options/options.css",
         "options/options.js"

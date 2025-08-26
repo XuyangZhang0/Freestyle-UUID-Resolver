@@ -15,6 +15,13 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
+// Ensure context menu exists after browser startup
+chrome.runtime.onStartup?.addListener(() => {
+  try {
+    setupContextMenu();
+  } catch (_) {}
+});
+
 // Extension action - open options page
 chrome.action.onClicked.addListener(async (tab) => {
   try {
@@ -34,8 +41,11 @@ function setupContextMenu() {
     chrome.contextMenus.create({
       id: 'resolve-uuid',
       title: 'Resolve UUID',
-      contexts: ['selection']
-      // Removing documentUrlPatterns to test on any page first
+      contexts: ['selection'],
+      documentUrlPatterns: [
+        'https://*.data.workspaceone.com/*',
+        'https://*.awmdm.com/*'
+      ]
     });
     console.log('UUID Resolver: Context menu created');
   });
@@ -57,6 +67,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (uuidMatch) {
       const uuid = uuidMatch[0].toLowerCase();
       console.log('UUID Resolver: Found UUID:', uuid);
+
+      // Stats: increment totalFound
+      incrementStat('totalFound');
       
       // Show immediate feedback that we found a UUID
       try {
@@ -66,6 +79,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         await resolveUUIDWithFallback(uuid, tab);
       } catch (error) {
         console.error('UUID Resolver: Error in resolution process:', error);
+        incrementStat('totalErrors');
         showNotification('Resolution Error', `Error processing UUID: ${error.message}`, tab, { level: 'error' });
       }
     } else {
@@ -135,10 +149,12 @@ async function resolveUUIDWithFallback(uuid, tab) {
     
     // If we get here, no entity type worked
     console.log('UUID Resolver: Could not resolve UUID with any entity type');
+    incrementStat('totalFailures');
     showNotification('UUID Not Found', `Could not resolve UUID: ${uuid}\n\nThe UUID may not exist, you may not have permission to access it, or it may be a different type of entity not yet supported.`, tab, { level: 'error' });
     
   } catch (error) {
     console.error('UUID Resolver: Resolution process failed:', error);
+    incrementStat('totalErrors');
     showNotification('Resolution Error', `Failed to resolve UUID: ${uuid}\n\nError: ${error.message}`, tab, { level: 'error' });
   }
 }
@@ -208,6 +224,9 @@ function showEntityDetails(entityData, tab) {
       tabId: tab?.id
     }
   });
+
+  // Stats: increment totalResolved
+  incrementStat('totalResolved');
   
   // Show notification via helper (best-effort)
   createNotification({
@@ -269,7 +288,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ success: false, error: error.message });
         });
         return true;
-        
+      
       case 'saveSettings':
         saveSettings(message.settings).then(() => {
           sendResponse({ success: true });
@@ -277,7 +296,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ success: false, error: error.message });
         });
         return true;
-        
+      
       case 'testConnection':
         testAPIConnection(message.settings).then(result => {
           sendResponse({ success: true, data: result });
@@ -285,13 +304,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ success: false, error: error.message });
         });
         return true;
-        
+      
       case 'getLastResolvedEntity':
         chrome.storage.local.get(['lastResolvedEntity'], (result) => {
           sendResponse({ success: true, data: result.lastResolvedEntity });
         });
         return true;
-        
+
+      case 'getStatistics':
+        getStatistics().then((stats) => {
+          sendResponse({ success: true, data: stats });
+        }).catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+        return true;
+      
       default:
         sendResponse({ success: false, error: 'Unknown action' });
     }
@@ -347,7 +374,7 @@ async function saveSettings(settings) {
  */
 async function setDefaultSettings() {
   const defaultSettings = {
-    enabled: true,
+    // Core server/auth
     serverUrl: '',
     organizationGroupId: null,
     authType: 'basic',
@@ -357,40 +384,51 @@ async function setDefaultSettings() {
     clientId: '',
     clientSecret: '',
     tokenUrl: '',
-    cacheTimeout: 300000
+
+    // General settings
+    showTooltips: true, // Show extra fields in success toast
+
+    // Advanced settings
+    apiTimeout: 30000
   };
-  
-  await saveSettings(defaultSettings);
+
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set(defaultSettings, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 /**
- * Resolve UUID using UEM API with proper entity type handling
+ * Resolve UUID by entity type (sets auth headers and dispatches)
  */
 async function resolveUUID(uuid, entityType) {
-  console.log(`UUID Resolver: Resolving UUID ${uuid} as type ${entityType}`);
-  
   const settings = await getSettings();
   const { serverUrl, authType } = settings;
-  
+
   if (!serverUrl) {
     throw new Error('Server URL not configured. Please configure the extension in the options page.');
   }
-  
+
   let headers = {
     'Accept': 'application/json',
     'Content-Type': 'application/json'
   };
-  
+
   // Set up authentication
   if (authType === 'basic') {
     const { username, password, apiKey } = settings;
     if (!username || !password) {
       throw new Error('Basic authentication not properly configured');
     }
-    
+
     const credentials = btoa(`${username}:${password}`);
     headers['Authorization'] = `Basic ${credentials}`;
-    
+
     if (apiKey) {
       headers['aw-tenant-code'] = apiKey;
     }
@@ -399,11 +437,13 @@ async function resolveUUID(uuid, entityType) {
     if (!clientId || !clientSecret || !tokenUrl) {
       throw new Error('OAuth not properly configured');
     }
-    
+
     const token = await getOAuthToken(clientId, clientSecret, tokenUrl);
     headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    throw new Error(`Unsupported auth type: ${authType}`);
   }
-  
+
   // Resolve based on entity type
   switch (entityType) {
     case 'tag':
@@ -696,6 +736,30 @@ async function testAPIConnection(settings) {
       build: response.BuildNumber || 'Unknown'
     }
   };
+}
+
+/**
+ * Get statistics
+ */
+async function getStatistics() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['stats'], (result) => {
+      const stats = result.stats || { totalFound: 0, totalResolved: 0, totalFailures: 0, totalErrors: 0 };
+      resolve(stats);
+    });
+  });
+}
+
+function incrementStat(key, by = 1) {
+  try {
+    chrome.storage.local.get(['stats'], (result) => {
+      const stats = result.stats || { totalFound: 0, totalResolved: 0, totalFailures: 0, totalErrors: 0 };
+      stats[key] = (stats[key] || 0) + by;
+      chrome.storage.local.set({ stats });
+    });
+  } catch (_) {
+    // ignore
+  }
 }
 
 console.log('UUID Resolver: Background service worker ready');

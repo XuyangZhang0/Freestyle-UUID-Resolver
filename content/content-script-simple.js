@@ -5,6 +5,18 @@
 
 console.log('UUID Resolver: Content script loaded');
 
+let showExtraFieldsInToast = true;
+
+// Load settings to determine whether to show extra fields in success toast
+try {
+  chrome.runtime.sendMessage({ action: 'getSettings' }, (resp) => {
+    if (resp && resp.success && resp.data) {
+      // repurposed: showTooltips means show extra fields in success toast
+      showExtraFieldsInToast = resp.data.showTooltips !== false;
+    }
+  });
+} catch (_) {}
+
 // Toast utilities
 function ensureStyle() {
   if (document.getElementById('uuid-resolver-toast-style')) return;
@@ -53,6 +65,15 @@ function formatEntityToast(data){
   let body = `Name: ${name}\nType: ${type}`;
   if (data.description) body += `\n${data.description}`;
   if (uuid) body += `\nUUID: ${uuid}`;
+  if (showExtraFieldsInToast) {
+    // Append extra fields if available
+    const extra = [];
+    if (data.version) extra.push(`Version: ${data.version}`);
+    if (data.platform) extra.push(`Platform: ${data.platform}`);
+    if (data.groupId) extra.push(`Group ID: ${data.groupId}`);
+    if (data.deviceType) extra.push(`Device Type: ${data.deviceType}`);
+    if (extra.length) body += `\n${extra.join('\n')}`;
+  }
   return body;
 }
 

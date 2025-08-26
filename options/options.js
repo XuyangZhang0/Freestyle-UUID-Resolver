@@ -313,7 +313,6 @@ async function saveSettings(settings) {
  */
 function collectSettings() {
   return {
-    enabled: document.getElementById('enabled').checked,
     serverUrl: document.getElementById('serverUrl').value.trim(),
     organizationGroupId: parseInt(document.getElementById('organizationGroupId').value) || null,
     authType: document.getElementById('authType').value,
@@ -330,8 +329,7 @@ function collectSettings() {
     authToken: document.getElementById('authToken').value,
     
     // General settings
-    autoRefresh: document.getElementById('autoRefresh').checked,
-    showTooltips: document.getElementById('showTooltips').checked,
+    showTooltips: document.getElementById('showTooltips').checked, // repurposed: show extra fields in success toast
     
     // Advanced settings
     apiTimeout: parseInt(document.getElementById('apiTimeout').value) * 1000, // Convert to ms
@@ -356,7 +354,6 @@ function collectSettings() {
 function populateForm(settings) {
   try {
     // Basic settings
-    document.getElementById('enabled').checked = settings.enabled !== false;
     document.getElementById('serverUrl').value = settings.serverUrl || '';
     document.getElementById('organizationGroupId').value = settings.organizationGroupId || '';
     document.getElementById('authType').value = settings.authType || 'basic';
@@ -373,7 +370,6 @@ function populateForm(settings) {
     document.getElementById('authToken').value = settings.authToken || '';
     
     // General settings
-    document.getElementById('autoRefresh').checked = settings.autoRefresh !== false;
     document.getElementById('showTooltips').checked = settings.showTooltips !== false;
     
     // Advanced settings
@@ -404,7 +400,6 @@ function populateForm(settings) {
  */
 function getDefaultSettings() {
   return {
-    enabled: true,
     serverUrl: '',
     authType: 'basic',
     username: '',
@@ -414,8 +409,7 @@ function getDefaultSettings() {
     clientSecret: '',
     tokenUrl: '',
     authToken: '',
-    autoRefresh: true,
-    showTooltips: true,
+    showTooltips: true, // repurposed: show extra fields in success toast
     apiTimeout: 30000, // 30 seconds
     maxConcurrentRequests: 5,
     debugMode: false,
@@ -435,35 +429,21 @@ function getDefaultSettings() {
  */
 async function updateStats() {
   try {
-    // Get stats from all tabs
-    const tabs = await chrome.tabs.query({ url: 'https://*.data.workspaceone.com/*' });
-    let totalStats = { totalFound: 0, totalResolved: 0 };
-    
-    for (const tab of tabs) {
-      try {
-        const response = await chrome.tabs.sendMessage(tab.id, { action: 'getStatistics' });
-        if (response && response.success && response.data) {
-          const stats = response.data;
-          totalStats.totalFound += stats.totalFound || 0;
-          totalStats.totalResolved += stats.totalResolved || 0;
-        }
-      } catch (error) {
-        // Tab might not have content script, ignore
-      }
-    }
-    
+    // Get global stats from background
+    const response = await chrome.runtime.sendMessage({ action: 'getStatistics' });
+    const stats = (response && response.success && response.data) ? response.data : { totalFound: 0, totalResolved: 0, totalFailures: 0, totalErrors: 0 };
+
     // Update display
-    document.getElementById('uuidCount').textContent = totalStats.totalFound;
-    document.getElementById('resolvedCount').textContent = totalStats.totalResolved;
-    
+    document.getElementById('uuidCount').textContent = stats.totalFound || 0;
+    document.getElementById('resolvedCount').textContent = stats.totalResolved || 0;
+
     // Calculate success rate
-    const successRate = totalStats.totalFound > 0 
-      ? Math.round((totalStats.totalResolved / totalStats.totalFound) * 100)
+    const successRate = (stats.totalFound || 0) > 0
+      ? Math.round(((stats.totalResolved || 0) / (stats.totalFound || 1)) * 100)
       : 0;
     document.getElementById('successRate').textContent = `${successRate}%`;
-    
   } catch (error) {
-    console.log('UUID Resolver Options: Could not get comprehensive stats');
+    console.log('UUID Resolver Options: Could not get stats from background');
     // Reset to zeros if no stats available
     document.getElementById('uuidCount').textContent = '0';
     document.getElementById('resolvedCount').textContent = '0';
