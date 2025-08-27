@@ -20,3 +20,8 @@ Removed legacy components: auto-detection content scripts, uuid-detector*, ui-en
 
 ## Stats
 - Background tracks: totalFound, totalResolved, totalFailures, totalErrors.
+
+## Distribution and Safety
+- Credentials are stored locally by Chrome and are not part of the repo.
+- Before zipping/sharing, clear credentials in Options or verify no secrets are present.
+- See docs/USER_GUIDE.md for packaging and privacy guidance.
