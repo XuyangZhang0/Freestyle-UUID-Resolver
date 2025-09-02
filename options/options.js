@@ -489,8 +489,8 @@ async function handleTestConnection() {
       throw new Error('Server URL is required');
     }
     
-    if (settings.authType === 'basic' && (!settings.username || !settings.password)) {
-      throw new Error('Username and password are required for Basic authentication');
+    if (settings.authType === 'basic' && (!settings.username || !settings.password || !settings.apiKey)) {
+      throw new Error('Username, password, and API key (tenant code) are required for Basic authentication');
     }
     
     if (settings.authType === 'oauth' && (!settings.clientId || !settings.clientSecret || !settings.tokenUrl)) {
@@ -546,7 +546,7 @@ async function handleTestConnection() {
     let errorMessage = error.message;
     
     // Provide specific guidance for common OAuth errors
-    if (settings.authType === 'oauth') {
+    if (currentSettings.authType === 'oauth') {
       if (errorMessage.includes('timeout')) {
         errorMessage = 'OAuth request timed out. Check your token URL and network connection.';
       } else if (errorMessage.includes('401')) {

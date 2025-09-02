@@ -79,9 +79,9 @@
           <h2>Server Configuration</h2>
           
           <div class="form-group">
-            <label for="serverUrl">UEM Server URL</label>
+            <label for="serverUrl">UEM API Base URL</label>
             <input type="url" id="serverUrl" placeholder="https://your-server.data.workspaceone.com">
-            <small>Enter your Workspace ONE UEM server URL</small>
+            <small>Enter your Workspace ONE UEM API base URL</small>
           </div>
 
           <div class="form-group">
@@ -119,9 +119,9 @@
             </div>
 
             <div class="form-group">
-              <label for="apiKey">API Key (Optional)</label>
-              <input type="text" id="apiKey" placeholder="Organization Group ID">
-              <small>Your organization's API key or tenant code</small>
+              <label for="apiKey">API Key (Tenant Code) — Required</label>
+              <input type="text" id="apiKey" placeholder="e.g. your-tenant-code" required>
+              <small>The API key (tenant code) is required for Basic auth and will be sent in the aw-tenant-code header.</small>
             </div>
           </div>
 

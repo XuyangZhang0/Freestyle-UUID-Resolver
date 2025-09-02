@@ -103,8 +103,8 @@ async function resolveUUIDWithFallback(uuid, tab) {
       return;
     }
 
-    if (settings.authType === 'basic' && (!settings.username || !settings.password)) {
-      showNotification('Authentication Required', `UUID found: ${uuid}\n\nPlease configure your username and password in the extension settings.`, tab, { level: 'error' });
+    if (settings.authType === 'basic' && (!settings.username || !settings.password || !settings.apiKey)) {
+      showNotification('Authentication Required', `UUID found: ${uuid}\n\nPlease configure your username, password, and API key (tenant code) in the extension settings.`, tab, { level: 'error' });
       return;
     }
 
@@ -422,16 +422,13 @@ async function resolveUUID(uuid, entityType) {
   // Set up authentication
   if (authType === 'basic') {
     const { username, password, apiKey } = settings;
-    if (!username || !password) {
-      throw new Error('Basic authentication not properly configured');
+    if (!username || !password || !apiKey) {
+      throw new Error('Basic authentication not properly configured: username, password, and API key (tenant code) are required');
     }
 
     const credentials = btoa(`${username}:${password}`);
     headers['Authorization'] = `Basic ${credentials}`;
-
-    if (apiKey) {
-      headers['aw-tenant-code'] = apiKey;
-    }
+    headers['aw-tenant-code'] = apiKey; // required for Basic auth
   } else if (authType === 'oauth') {
     const { clientId, clientSecret, tokenUrl } = settings;
     if (!clientId || !clientSecret || !tokenUrl) {
@@ -707,16 +704,13 @@ async function testAPIConnection(settings) {
   
   if (authType === 'basic') {
     const { username, password, apiKey } = settings;
-    if (!username || !password) {
-      throw new Error('Username and password are required for Basic authentication');
+    if (!username || !password || !apiKey) {
+      throw new Error('Username, password, and API key (tenant code) are required for Basic authentication');
     }
     
     const credentials = btoa(`${username}:${password}`);
     headers['Authorization'] = `Basic ${credentials}`;
-    
-    if (apiKey) {
-      headers['aw-tenant-code'] = apiKey;
-    }
+    headers['aw-tenant-code'] = apiKey; // required for Basic auth
   } else if (authType === 'oauth') {
     const { clientId, clientSecret, tokenUrl } = settings;
     if (!clientId || !clientSecret || !tokenUrl) {

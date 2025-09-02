@@ -24,12 +24,21 @@ function ensureStyle() {
   style.id = 'uuid-resolver-toast-style';
   style.textContent = `
     .uuid-resolver-toast-container{position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;flex-direction:column;gap:8px}
-    .uuid-resolver-toast{background:#0b6aa2;color:#fff;padding:12px 14px;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.2);max-width:380px;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;position:relative}
+    .uuid-resolver-toast{background:#0b6aa2;color:#fff;padding:12px 14px;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.2);max-width:380px;font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;position:relative;padding-right:36px}
     .uuid-resolver-toast.info{background:#d97706} /* orange-600 */
-    .uuid-resolver-toast.success{background:#0e7a22}
+    .uuid-resolver-toast.success{background:#3778F5}
     .uuid-resolver-toast.error{background:#b00020}
-    .uuid-resolver-toast .title{font-weight:600;margin-bottom:4px}
-    .uuid-resolver-toast .body{white-space:pre-wrap;word-break:break-word}
+    /* Hard reset to prevent host page styles (borders/dividers) from leaking in */
+    .uuid-resolver-toast, .uuid-resolver-toast * { box-sizing: border-box; border: 0 !important; outline: 0; }
+    .uuid-resolver-toast hr{ display:none !important }
+    .uuid-resolver-toast .header{display:flex;align-items:center;justify-content:space-between;margin:0 0 2px 0;background:transparent !important}
+    .uuid-resolver-toast .header:before, .uuid-resolver-toast .header:after{content:none !important;display:none !important;border:0 !important}
+    .uuid-resolver-toast .title{color:#fff !important;font-weight:600;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:transparent !important;line-height:1.2}
+    .uuid-resolver-toast.success .title{font-size:16px;font-weight:700}
+    .uuid-resolver-toast .type-pill{padding:2px 8px;border-radius:9999px;background:#6B7280;color:#fff;font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap;line-height:18px}
+    .uuid-resolver-toast .body{white-space:pre-wrap;word-break:break-word;background:transparent !important;margin-top:0}
+    .uuid-resolver-toast .header + .body{border-top:none !important}
+    .uuid-resolver-toast .body:before,.uuid-resolver-toast .body:after{content:none !important;display:none !important;border:0 !important}
     .uuid-resolver-toast .close{position:absolute;top:8px;right:10px;cursor:pointer;opacity:.9}
   `;
   document.head.appendChild(style);
@@ -45,11 +54,12 @@ function getContainer(){
   return c;
 }
 
-function showToast(title, body, level='info', timeout=6000, persist=false){
+function showToast(title, body, level='info', timeout=6000, persist=false, badgeText){
   ensureStyle();
   const el = document.createElement('div');
   el.className = `uuid-resolver-toast ${level}`;
-  el.innerHTML = `<div class="title">${title}</div><div class="body">${body}</div><div class="close" aria-label="Close">×</div>`;
+  const badge = badgeText && level === 'success' ? `<span class="type-pill" title="Type">${badgeText}</span>` : '';
+  el.innerHTML = `<div class="header"><div class="title">${title}</div>${badge}</div><div class="body">${body}</div><div class="close" aria-label="Close">×</div>`;
   const closeBtn = el.querySelector('.close');
   closeBtn.addEventListener('click', () => el.remove());
   getContainer().appendChild(el);
@@ -59,12 +69,11 @@ function showToast(title, body, level='info', timeout=6000, persist=false){
 }
 
 function formatEntityToast(data){
-  const name = data.name || 'Unknown';
-  const type = data.subType || data.type || 'Entity';
+  // Title already shows the Name; keep body focused on details only
   const uuid = data.uuid || '';
-  let body = `Name: ${name}\nType: ${type}`;
-  if (data.description) body += `\n${data.description}`;
-  if (uuid) body += `\nUUID: ${uuid}`;
+  let body = '';
+  if (data.description) body += `${data.description}`;
+  if (uuid) body += `${body ? '\n' : ''}UUID: ${uuid}`;
   if (showExtraFieldsInToast) {
     // Append extra fields if available
     const extra = [];
@@ -72,7 +81,7 @@ function formatEntityToast(data){
     if (data.platform) extra.push(`Platform: ${data.platform}`);
     if (data.groupId) extra.push(`Group ID: ${data.groupId}`);
     if (data.deviceType) extra.push(`Device Type: ${data.deviceType}`);
-    if (extra.length) body += `\n${extra.join('\n')}`;
+    if (extra.length) body += `${body ? '\n' : ''}${extra.join('\n')}`;
   }
   return body;
 }
@@ -87,8 +96,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const body = formatEntityToast(message.data);
     // Remove any in-progress info toast
     dismissInfoToasts();
-    // Success should persist longer and provide close
-    showToast('UUID Resolved', body, 'success', 12000, true);
+    // Use entity name as prominent title and show type as a pill
+    const entityTitle = message.data.name || 'UUID Resolved';
+    const badge = message.data.subType || message.data.type || 'Entity';
+    showToast(entityTitle, body, 'success', 12000, true, badge);
     sendResponse?.({ ok: true });
     return; // handled
   }
